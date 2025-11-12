@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<title>Ikon-navigasjonstest</title>
+<style>
+  body { font-family: Arial, sans-serif; text-align: center; margin: 40px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(5, 100px);
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+  }
+  .icon {
+    cursor: pointer;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    padding: 10px;
+    transition: 0.2s;
+  }
+  .icon:hover { background: #f0f0f0; }
+  .label { display: block; font-size: 12px; margin-top: 4px; }
+  table { margin: 30px auto; border-collapse: collapse; }
+  td, th { border: 1px solid #ccc; padding: 6px 10px; }
+  th { background: #f2f2f2; }
+</style>
+</head>
+<body>
+
+<h2 id="status">Trykk "Start test"</h2>
+<button id="startBtn">Start test</button>
+<div class="grid" id="iconGrid"></div>
+<div id="results"></div>
+
+<script>
+// 20 ikoner som vises i hver test (alltid)
+const allIcons = [
+  "✉️","🔍","🏠","❤️","⚙️","📞","⭐","📷","👤","🗑️",
+  "🔔","📅","🚗","✏️","📁","📤","🎓","💬","👍","➕"
+];
+const allLabels = [
+  "E-post","Søk","Hjem","Lik","Innstillinger","Ring","Favoritt","Kamera","Profil","Slett",
+  "Varsel","Kalender","Bil","Skriv","Fil","Send","Studier","Melding","Liker","Legg til"
+];
+
+// 6 ikoner som faktisk testes
+const testedIcons = ["✉️","🏠","❤️","⚙️","📞","📅"];
+const testedLabels = ["E-post","Hjem","Lik","Innstillinger","Ring","Kalender"];
+
+let testOrder = [];
+let current = 0;
+let startTime;
+let results = [];
+
+const grid = document.getElementById("iconGrid");
+const status = document.getElementById("status");
+const startBtn = document.getElementById("startBtn");
+const resultsDiv = document.getElementById("results");
+
+startBtn.onclick = startTest;
+
+function startTest() {
+  results = [];
+  testOrder = [];
+
+  // 6 tester med ikon og 6 med ikon+tekst
+  for (let i = 0; i < testedIcons.length; i++) {
+    testOrder.push({mode: "ikon", targetIndex: i});
+    testOrder.push({mode: "ikon+tekst", targetIndex: i});
+  }
+
+  // Random rekkefølge på testene
+  testOrder.sort(() => Math.random() - 0.5);
+  current = 0;
+  resultsDiv.innerHTML = "";
+  runNext();
+}
+
+function runNext() {
+  if (current >= testOrder.length) {
+    endTest();
+    return;
+  }
+
+  const { mode, targetIndex } = testOrder[current];
+  const targetName = testedLabels[targetIndex];
+  status.textContent = `Finn "${targetName}" (${mode})`;
+
+  renderIcons(mode);
+  startTime = performance.now();
+
+  grid.querySelectorAll(".icon").forEach((btn) => {
+    btn.onclick = () => {
+      const timeUsed = ((performance.now() - startTime) / 1000).toFixed(2);
+      const idx = parseInt(btn.dataset.index, 10);
+      const clickedLabel = allLabels[idx];
+      const correct = clickedLabel === targetName;
+      results.push({
+        testNr: current + 1,
+        modus: mode,
+        mål: targetName,
+        valgt: clickedLabel,
+        tid: timeUsed,
+        riktig: correct ? "Ja" : "Nei"
+      });
+      current++;
+      setTimeout(runNext, 700); // liten pause mellom tester
+    };
+  });
+}
+function renderIcons(mode) {
+  const order = allIcons.map((_, i) => i).sort(() => Math.random() - 0.5);
+  grid.innerHTML = "";
+  for (const i of order) {
+    const div = document.createElement("div");
+    div.className = "icon";
+    div.dataset.index = i;
+    div.innerHTML = allIcons[i] + (mode === "ikon+tekst" ? `<span class="label">${allLabels[i]}</span>` : "");
+    grid.appendChild(div);
+  }
+}
+function endTest() {
+  status.textContent = "Test ferdig!";
+  grid.innerHTML = "";
+
+  // Sorter resultater for visning:
+  // Først alle "ikon", deretter "ikon+tekst", begge i rekkefølge etter testedLabels
+  const sortedResults = [
+    ...testedLabels.map(lbl => results.find(r => r.mål === lbl && r.modus === "ikon")),
+    ...testedLabels.map(lbl => results.find(r => r.mål === lbl && r.modus === "ikon+tekst"))
+  ];
+
+  let html = `
+    <h3>Resultater</h3>
+    <table>
+      <tr><th>#</th><th>Modus</th><th>Mål</th><th>Valgt</th><th>Riktig</th><th>Tid (s)</th></tr>
+  `;
+  sortedResults.forEach((r, idx) => {
+    html += `<tr>
+      <td>${idx + 1}</td>
+      <td>${r.modus}</td>
+      <td>${r.mål}</td>
+      <td>${r.valgt}</td>
+      <td>${r.riktig}</td>
+      <td>${r.tid}</td>
+    </tr>`;
+  });
+  html += `</table>
+    <button onclick="downloadCSV()">Last ned CSV</button>
+  `;
+  resultsDiv.innerHTML = html;
+
+  // Oppdater resultatrekkefølgen i CSV også
+  results = sortedResults;
+}
+
+function downloadCSV() {
+  let csv = "Nr,Modus,Mål,Valgt,Riktig,Tid (s)\n";
+  results.forEach((r, i) => {
+    csv += `${i + 1},${r.modus},${r.mål},${r.valgt},${r.riktig},${r.tid}\n`;
+  });
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "ikon_test_resultater.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
